@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'none'">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OwlSight</title><link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header class="titlebar">
+  <span class="app-name">OwlSight</span><span id="file-name">EXR 查看器</span>
+  <nav aria-label="窗口控制"><button id="pin" title="窗口置顶 · Ctrl+T" aria-label="窗口置顶" aria-pressed="false"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M8 3h8M9 3v7l-3 4v2h12v-2l-3-4V3M12 16v6" stroke-linecap="round" stroke-linejoin="round"/></svg></button><button id="minimize" title="最小化" aria-label="最小化">−</button><button id="maximize" title="最大化或还原" aria-label="最大化或还原">□</button><button id="close" title="关闭" aria-label="关闭">×</button></nav>
+</header>
+<div id="log-warning" role="status" hidden style="position:fixed;top:36px;left:16px;right:16px;z-index:100;background:#4b351c;color:#ffe5b5;padding:8px;border-radius:4px"></div>
+<main id="stage" tabindex="0" aria-label="图像预览区域">
+  <div id="empty">
+    <svg class="drop-icon" width="112" height="112" viewBox="0 0 112 112" fill="none" aria-hidden="true"><path d="M19 24l18 8 19-7 19 7 18-8-5 47-32 21-32-21Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="40" cy="51" r="16" stroke="currentColor" stroke-width="2"/><circle cx="72" cy="51" r="16" stroke="currentColor" stroke-width="2"/><circle cx="40" cy="51" r="5" fill="currentColor"/><circle cx="72" cy="51" r="5" fill="currentColor"/><path d="m50 73 6 7 6-7M32 98h48" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+    <p>将 EXR 文件或序列文件夹拖放到此处</p>
+    <button id="empty-open">浏览文件</button>
+    <button id="demo" class="quiet">打开样例</button>
+  </div>
+  <canvas id="viewer" hidden aria-label="EXR 图像"></canvas>
+  <div id="viewer-info" hidden><span id="image-label"></span><span id="status">基础预览 · 非 OCIO</span><span id="metadata">尚未打开文件</span></div>
+  <div id="grid" hidden aria-label="所有通道网格"></div>
+  <div id="busy" hidden><span class="spinner"></span><span id="busy-text">正在读取 EXR…</span></div>
+  <div id="error" hidden role="alert"><strong>无法打开图像</strong><span id="error-text"></span><button id="dismiss-error">关闭提示</button></div>
+  <div id="drop-hint" hidden>松开以打开 EXR 文件或序列文件夹</div>
+</main>
+<div id="sequence-controls" hidden aria-label="序列播放">
+  <button id="sequence-previous" title="上一帧 · ←" aria-label="上一帧">‹</button><button id="sequence-play" aria-pressed="false" title="播放 / 暂停 · Space" aria-label="播放"><svg viewBox="0 0 24 24" aria-hidden="true"><path class="play-icon" d="M7 4 L21 12 L7 20 Z"/><path class="pause-icon" d="M6 4 H10 V20 H6 Z M14 4 H18 V20 H14 Z"/></svg></button><button id="sequence-next" title="下一帧 · →" aria-label="下一帧">›</button>
+  <span id="sequence-frame"></span><input id="sequence-position" type="range" min="0" max="0" value="0" step="1" aria-label="序列帧位置">
+  <select id="sequence-resolution" aria-label="预览分辨率" title="按原图尺寸降低读取预览分辨率，暂停时保留"><option value="1">full</option><option value="2" selected>1/2</option><option value="3">1/3</option><option value="4">1/4</option><option value="8">1/8</option></select>
+  <select id="sequence-fps" aria-label="播放帧率"><option value="12">12 fps</option><option value="24" selected>24 fps</option><option value="25">25 fps</option><option value="30">30 fps</option><option value="60">60 fps</option></select>
+  <label class="loop-label"><input id="sequence-loop" type="checkbox" checked>循环</label><span id="sequence-status" hidden></span><span id="perf-status" role="status" hidden></span>
+</div>
+<div id="shortcut-watermark" aria-label="常用快捷键">S · 切换图层　 A · 通道网格　 F · 适应窗口<br>Alt＋左键 / 中键 · 平移　 右键拖动 · 移动窗口<br>滚轮 · 缩放　 Ctrl O · 打开<br>1 / 2 / 3 / 4 · 分辨率<br>Ctrl F · 全屏　 Ctrl T · 置顶<span class="sequence-shortcuts"><br>左键拖动 · 定位帧　 ← → · 逐帧<br>Space · 播放 / 暂停　 R · 从首帧重播</span></div>
+<div id="context-menu" role="dialog" aria-label="预览操作" hidden>
+  <div class="menu-tabs" role="tablist" aria-label="预览设置分类">
+    <button id="tab-channels" role="tab" aria-selected="true" aria-controls="panel-channels" data-menu-tab="channels">通道</button>
+    <button id="tab-display" role="tab" aria-selected="false" aria-controls="panel-display" data-menu-tab="display">显示设置</button>
+    <button id="tab-settings" role="tab" aria-selected="false" aria-controls="panel-settings" data-menu-tab="settings">设置</button>
+  </div>
+  <section id="panel-channels" class="menu-panel" role="tabpanel" aria-labelledby="tab-channels">
+  <div id="component-switch" role="group" aria-label="预览分量" title="切换颜色图层的显示分量；缺少该分量的图层保留原预览"><button data-component="RGBA" aria-pressed="true">RGBA</button><button data-component="R" aria-pressed="false">R</button><button data-component="G" aria-pressed="false">G</button><button data-component="B" aria-pressed="false">B</button><button data-component="A" aria-pressed="false">A</button></div>
+  <div id="context-items"></div>
+  </section>
+  <section id="panel-display" class="menu-panel display-settings" role="tabpanel" aria-labelledby="tab-display" hidden><label>显示变换<select id="display-mode" aria-label="显示变换"><option value="auto">基础 sRGB / 数据 Raw</option><option value="ocio">OCIO / 数据 Raw</option><option value="raw">全部 Raw</option><option value="range">范围映射</option></select></label><label>曝光<input id="exposure" aria-label="曝光" type="range" min="-8" max="8" value="0" step="0.25"><output id="exposure-value">0.00</output></label><div id="ocio-controls" hidden>
+    <div class="ocio-config-row"><span id="ocio-config-name">尚未加载配置</span><button id="ocio-open">加载 .ocio</button><button id="ocio-builtin">内置</button></div>
+    <label>输入空间<select id="ocio-input" aria-label="OCIO 输入空间" title="手动选择 EXR 工作空间，不是自动识别"></select></label>
+    <label>Display<select id="ocio-display" aria-label="OCIO Display"></select></label>
+    <label>View<select id="ocio-view" aria-label="OCIO View"></select></label>
+    <label>Look<select id="ocio-look" aria-label="OCIO Look"></select></label>
+    <p id="ocio-message" role="status"></p>
+  </div></section>
+  <section id="panel-settings" class="menu-panel general-settings" role="tabpanel" aria-labelledby="tab-settings" hidden>
+    <form id="viewer-settings-form">
+      <fieldset id="viewer-preferences" disabled>
+        <label class="setting-row" for="memory-limit">最大缓存内存 <span class="setting-input"><input id="memory-limit" type="number" min="0.125" step="any" inputmode="decimal"><span>GiB</span></span></label>
+        <label class="setting-row" for="default-resolution">打开时的分辨率<select id="default-resolution"><option value="1">full</option><option value="2" selected>1/2</option><option value="3">1/3</option><option value="4">1/4</option><option value="8">1/8</option></select></label>
+        <div class="settings-save"><button id="save-viewer-settings" type="submit">保存设置</button><span id="settings-message" role="status">正在读取设置…</span></div>
+      </fieldset>
+    </form>
+    <label><input id="show-shortcuts" type="checkbox" checked>显示快捷键提示</label>
+    <label><input id="show-image-info" type="checkbox" checked>显示图像信息</label>
+    <div class="setting-log-row"><label><input id="log-events" type="checkbox" checked>记录性能日志</label><button id="open-log-directory" type="button" title="打开日志目录">打开目录</button></div>
+    <div class="settings-actions"><button id="set-default-exr" type="button" title="打开 Windows 默认应用设置，需要你确认">设为 EXR 默认程序</button></div>
+  </section>
+</div>
+<script type="module" src="renderer.mjs"></script>
+</body></html>

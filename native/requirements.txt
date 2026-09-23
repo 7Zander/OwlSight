@@ -1,0 +1,4 @@
+OpenEXR==3.4.15
+numpy==2.3.5
+OpenImageIO==3.1.17.0
+OpenColorIO==2.5.1

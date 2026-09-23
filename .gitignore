@@ -1,0 +1,30 @@
+# Dependencies and generated files
+/node_modules/
+/build/
+/dist/
+/resources/decoder/
+/logs/
+__pycache__/
+*.pyc
+*.zip
+
+# Private media and local tools
+/tests/private-fixtures/
+/.scratch/
+/.vs/
+/.vscode/
+Thumbs.db
+.DS_Store
+
+# Local assistant context must stay out of the public repository
+AGENTS.md
+CLAUDE.md
+CONTEXT.md
+OWLSIGHT_ALPHA_PLAN.md
+/.agents/
+/.codex/
+/.claude/
+/docs/agents/
+/docs/adr/
+/docs/research/
+/docs/ITERATION_LOG.md

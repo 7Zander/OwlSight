@@ -1,0 +1,26 @@
+import { spawnSync } from 'node:child_process';
+import { cp, mkdir, readdir, writeFile } from 'node:fs/promises';
+import path from 'node:path';
+const python=process.env.OWLSIGHT_BUILD_PYTHON || path.resolve('build/native-env/Scripts/python.exe');
+const result=spawnSync(python,['-c','import sys,sysconfig,json,OpenEXR,numpy,OpenImageIO,PyOpenColorIO; print(json.dumps(dict(base=sys.base_prefix,site=sysconfig.get_paths()["purelib"],python=sys.version.split()[0],openexr=OpenEXR.__version__,numpy=numpy.__version__,oiio=OpenImageIO.VERSION_STRING,ocio=PyOpenColorIO.__version__)))'],{encoding:'utf8',windowsHide:true});
+if(result.status!==0) throw new Error(result.stderr || result.error?.message);
+const info=JSON.parse(result.stdout),target=path.resolve('resources/decoder');
+if(!info.python.startsWith('3.12.') || info.openexr!=='3.4.15' || info.numpy!=='2.3.5' || info.oiio!=='3.1.17.0' || info.ocio!=='2.5.1') throw new Error('Use CPython 3.12 x64 and native/requirements.txt versions.');
+await mkdir(target,{recursive:true});
+await cp(path.join(info.base,'python.exe'),path.join(target,'owlsight-decoder.exe'));
+for(const item of await readdir(info.base)) if(/^(python3.*\.dll|vcruntime.*\.dll|LICENSE.*)$/i.test(item)) await cp(path.join(info.base,item),path.join(target,item));
+await cp(path.join(info.base,'DLLs'),path.join(target,'DLLs'),{recursive:true});
+await cp(path.join(info.base,'Lib'),path.join(target,'Lib'),{recursive:true,filter:source=>!path.relative(path.join(info.base,'Lib'),source).split(path.sep).some(p=>['site-packages','__pycache__','test','tests','idlelib','tkinter','turtledemo','ensurepip'].includes(p))});
+await mkdir(path.join(target,'Lib/site-packages'),{recursive:true});
+for(const item of await readdir(info.site)) if(/^(numpy|openexr|openimageio|PyOpenColorIO|opencolorio)([.-]|$)/i.test(item)) await cp(path.join(info.site,item),path.join(target,'Lib/site-packages',item),{recursive:true,filter:source=>!source.split(path.sep).some(p=>['__pycache__','tests'].includes(p))});
+// Isolate from PATH, PYTHONPATH, user packages and registry-installed Python.
+await writeFile(path.join(target,'python312._pth'),'.\nLib\nDLLs\nLib/site-packages\n');
+await cp('native/decoder.py',path.join(target,'decoder.py'));
+await cp('native/preview_service.py',path.join(target,'preview_service.py'));
+await cp('native/perf_support.py',path.join(target,'perf_support.py'));
+await cp('native/register_exr.py',path.join(target,'register_exr.py'));
+await cp('native/ocio_service.py',path.join(target,'ocio_service.py'));
+await cp(path.join(info.site,'opencolorio-2.5.1.dist-info/licenses'),'third_party/licenses/OpenColorIO-2.5.1',{recursive:true});
+await cp(path.join(info.site,'openimageio-3.1.17.0.dist-info/licenses'), 'third_party/licenses/OpenImageIO-3.1.17.0', {recursive:true});
+await writeFile(path.join(target,'versions.json'),JSON.stringify({python:info.python,OpenEXR:info.openexr,numpy:info.numpy,OpenImageIO:info.oiio,OpenColorIO:info.ocio},null,2));
+console.log('Bundled isolated Python/OpenEXR runtime:',info.python,info.openexr,info.numpy);

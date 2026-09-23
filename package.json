@@ -1,0 +1,53 @@
+{
+  "name": "owlsight",
+  "version": "0.1.0-alpha.1",
+  "releaseName": "alpha_v0.1.0",
+  "description": "OwlSight EXR image and sequence viewer — alpha_v0.1.0",
+  "license": "GPL-3.0-or-later",
+  "author": "OwlSight contributors",
+  "main": "src/app/main.cjs",
+  "scripts": {
+    "start": "electron .",
+    "test": "node --test tests/unit/*.test.mjs tests/integration/*.test.mjs",
+    "fixtures": "node scripts/generate-fixtures.mjs",
+    "check": "node scripts/check.mjs",
+    "package:win": "node scripts/package.mjs",
+    "test:desktop": "node scripts/test-desktop.mjs",
+    "build:decoder": "node scripts/build-decoder.mjs",
+    "test:native": "node scripts/test-native.mjs",
+    "test:startup": "node scripts/test-startup.mjs",
+    "test:errors": "node scripts/test-decoder-errors.mjs",
+    "test:boundaries": "node scripts/test-decoder-boundaries.mjs",
+    "test:recovery": "node scripts/test-decoder-recovery.mjs",
+    "test:private": "node scripts/test-large-private.mjs",
+    "test:components": "node scripts/test-components.mjs",
+    "test:window-ui": "node scripts/test-window-ui.mjs",
+    "fixtures:sequence": "build/native-env/Scripts/python.exe scripts/generate-sequence-fixtures.py",
+    "test:sequence": "node scripts/test-sequence.mjs",
+    "test:sequence-native": "node scripts/test-sequence-native.mjs",
+    "benchmark:sequence-private": "node scripts/benchmark-sequence-private.mjs",
+    "test:sequence-private": "node scripts/test-sequence-private.mjs",
+    "test:decoder-memory": "node --expose-gc scripts/test-decoder-memory.mjs",
+    "test:preview-native": "node scripts/test-preview-native.mjs",
+    "benchmark:playback": "node scripts/benchmark-playback.mjs",
+    "test:gpu": "node scripts/test-gpu.mjs",
+    "test:inputs": "node scripts/test-inputs.mjs",
+    "test:playing-layer-switch": "node scripts/test-playing-layer-switch.mjs",
+    "test:preview-pool": "node scripts/test-preview-pool.mjs",
+    "fixtures:ocio": "build/native-env/Scripts/python.exe scripts/generate-ocio-fixtures.py",
+    "test:ocio": "node scripts/test-ocio.mjs",
+    "test:gpu-cache": "node scripts/test-gpu-cache.mjs",
+    "test:layer-reuse": "node scripts/test-layer-reuse.mjs",
+    "test:perf-log": "node scripts/test-perf-log.mjs"
+  },
+  "devDependencies": {
+    "@electron/packager": "20.3.0",
+    "electron": "44.4.3",
+    "playwright": "1.58.2",
+    "exrs": "1.0.3"
+  },
+  "engines": {
+    "node": ">=24.15.0 <25"
+  },
+  "packageManager": "npm@12.0.2"
+}
