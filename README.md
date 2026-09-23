@@ -1,4 +1,4 @@
-<img width="1280" height="850" alt="Interface preview3" src="https://github.com/user-attachments/assets/2a355c2c-0b41-4fb2-bd72-f6618000ca19" /># OwlSight
+# OwlSight
 
 本项目全程采用 Vibe Coding 方式开发。
 
