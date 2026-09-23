@@ -5,12 +5,17 @@
 **这是一个面向 CG / VFX 工作流的 EXR 图像与序列查看器。**
 ## 介绍
 
-<img width="1280" height="850" alt="Interface preview" src="https://github.com/user-attachments/assets/fe703393-a279-40e4-bca0-a979bc1d34c3" />
-<img width="1280" height="850" alt="Interface preview2" src="https://github.com/user-attachments/assets/812c4394-bac0-4eb0-932d-82af19fdd423" />
-<img width="1280" height="850" alt="Interface preview3" src="https://github.com/user-attachments/assets/9ca218a4-acbd-4676-9df0-bddf8db62f0a" />
-
-
 OwlSight 专注于快速查看渲染结果。将其设为 EXR 默认打开方式后，可以双击文件打开；也可以直接把 EXR 拖入窗口，查看各个通道和播放图像序列。使用快捷键切换通道与预览分辨率，并通过 OpenColorIO 调整色彩显示。
+
+<p align="center">
+  <img src="https://github.com/user-attachments/assets/fe703393-a279-40e4-bca0-a979bc1d34c3" width="32%" alt="Interface preview">
+  <img src="https://github.com/user-attachments/assets/812c4394-bac0-4eb0-932d-82af19fdd423" width="32%" alt="Interface preview2">
+  <img src="https://github.com/user-attachments/assets/9ca218a4-acbd-4676-9df0-bddf8db62f0a" width="32%" alt="Interface preview3">
+</p>
+<img width="1280" height="850" alt="Interface preview" src="https://github.com/user-attachments/assets/c0bf288d-2891-46d3-8562-67b3f7618cfb" />
+
+
+
 
 当前仍处于 Alpha 阶段，计划提供两种使用模式：
 1. **Quick Viewer**：用户双击 EXR 文件后快速打开，用于轻量查看和基础序列浏览。（当前已完成的基础功能）
