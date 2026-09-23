@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-import {imageSamplingGLSL,defaultChannelMap} from './image-layout.mjs';
+import {imageSamplingGLSL,defaultChannelMap,alphaPreviewGLSL} from './image-layout.mjs';
 export function disposeOcio(gl,bundle){if(!bundle)return;for(const t of bundle.textures)gl.deleteTexture(t.texture);gl.deleteProgram(bundle.program);}
 export function prepareOcio(gl,vertex,data){
  const textures=[],shaders=[];let program;
@@ -15,13 +15,16 @@ uniform float exposure;
 in vec2 uv;
 out vec4 outputColor;
 ${imageSamplingGLSL}
+${alphaPreviewGLSL}
 ${data.code}
 void main(){
- vec3 value=sourcePixel().rgb;
- if(any(isnan(value))||any(isinf(value))){outputColor=vec4(1,0,1,1);return;}
+ vec4 pixel=sourcePixel();
+ bool showAlpha=channelMap.w>=0;
+ vec3 value=showAlpha?alphaDisplayInput(pixel):pixel.rgb;
+ if(any(isnan(value))||any(isinf(value))||(showAlpha&&(isnan(pixel.a)||isinf(pixel.a)))){outputColor=vec4(1,0,1,1);return;}
  value=owlInput(vec4(value,1)).rgb*${data.dataInput?'1.0':'exp2(exposure)'};
  value=owlDisplay(vec4(value,1)).rgb;
- outputColor=vec4(clamp(value,0.0,1.0),1);
+ outputColor=vec4(showAlpha?overChecker(value,pixel.a):clamp(value,0.0,1.0),1);
 }`;
   const compile=(type,text)=>{const shader=gl.createShader(type);shaders.push(shader);gl.shaderSource(shader,text);gl.compileShader(shader);if(!gl.getShaderParameter(shader,gl.COMPILE_STATUS))throw new Error('OCIO GPU 编译失败：'+gl.getShaderInfoLog(shader));return shader;};
   const vs=compile(gl.VERTEX_SHADER,vertex),fs=compile(gl.FRAGMENT_SHADER,source);
@@ -42,12 +45,12 @@ void main(){
    if(gl.getError()!==gl.NO_ERROR)throw new Error('OCIO LUT 上传失败。');
    gl.uniform1i(gl.getUniformLocation(program,entry.sampler),unit);
   }
-  return {id:data.id,program,textures,exposure:gl.getUniformLocation(program,'exposure'),channelMap:gl.getUniformLocation(program,'channelMap')};
+  return {id:data.id,program,textures,exposure:gl.getUniformLocation(program,'exposure'),channelMap:gl.getUniformLocation(program,'channelMap'),checkerSize:gl.getUniformLocation(program,'checkerSize')};
  }catch(error){for(const t of textures)gl.deleteTexture(t.texture);if(program)gl.deleteProgram(program);throw error;}
  finally{for(const shader of shaders)gl.deleteShader(shader);gl.activeTexture(gl.TEXTURE0);}
 }
-export function drawOcio(gl,bundle,exposure,channelMap=defaultChannelMap){
- gl.useProgram(bundle.program);gl.uniform1f(bundle.exposure,exposure);gl.uniform4iv(bundle.channelMap,channelMap);
+export function drawOcio(gl,bundle,exposure,channelMap=defaultChannelMap,checkerSize=12){
+ gl.useProgram(bundle.program);gl.uniform1f(bundle.exposure,exposure);gl.uniform4iv(bundle.channelMap,channelMap);gl.uniform1f(bundle.checkerSize,checkerSize);
  for(const t of bundle.textures){gl.activeTexture(gl.TEXTURE0+t.unit);gl.bindTexture(t.target,t.texture);}
  gl.activeTexture(gl.TEXTURE0);gl.drawArrays(gl.TRIANGLES,0,6);
 }

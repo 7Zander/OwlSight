@@ -7,6 +7,7 @@ const root = path.resolve(__dirname, '../..');
 let diagnostics;
 const decoder = require('../exr/preview-pool.cjs').createPreviewPool(root,{onTelemetry:data=>diagnostics?.decoded(data)});
 const { createViewerSettings } = require('./viewer-settings.cjs');
+const { copyLegacySettings } = require('./profile.cjs');
 const {openExrDefaults}=require('./file-association.cjs');
 const {createPerfService}=require('./perf-service.cjs');
 const {discover,resolveOpenTarget}=require('./sequence.cjs');
@@ -19,7 +20,7 @@ let colorService;
 let window, pendingPath, rendererReady = false;
 let activeReads = 0, readGeneration = 0, windowDrag = null;
 // Keep development and packaged runs out of shared Electron/user profiles.
-app.setPath('userData', process.env.OWLSIGHT_PROFILE_DIR || path.join(app.getPath('appData'), 'OwlSight-Prototype'));
+app.setPath('userData', process.env.OWLSIGHT_PROFILE_DIR || path.join(app.getPath('appData'), 'OwlSight'));
 protocol.registerSchemesAsPrivileged([{ scheme: 'owlsight', privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true } }]);
 
 function fileArg(argv, cwd = process.cwd()) { const file = argv.slice(1).find(arg => !arg.startsWith('-') && /\.exr$/i.test(arg)); return file ? path.resolve(cwd, file) : undefined; }
@@ -58,6 +59,7 @@ else {
   app.on('second-instance', (_event, argv, cwd) => sendOpen(fileArg(argv, cwd)));
   app.on('window-all-closed', async () => { await diagnostics?.close('windows-closed',false); decoder.dispose(); colorService?.dispose(); app.quit(); });
   app.whenReady().then(async () => {
+    if (!process.env.OWLSIGHT_PROFILE_DIR) await copyLegacySettings(app.getPath('appData'), app.getPath('userData'));
     viewerSettings=await createViewerSettings(app.getPath('userData'));
     diagnostics=createPerfService({app,root,getWindow:()=>window,getDecoder:()=>decoder});
     diagnostics.setEnabled(viewerSettings.state().preferences.logging);

@@ -14,7 +14,16 @@
 <div id="log-warning" role="status" hidden style="position:fixed;top:36px;left:16px;right:16px;z-index:100;background:#4b351c;color:#ffe5b5;padding:8px;border-radius:4px"></div>
 <main id="stage" tabindex="0" aria-label="图像预览区域">
   <div id="empty">
-    <svg class="drop-icon" width="112" height="112" viewBox="0 0 112 112" fill="none" aria-hidden="true"><path d="M19 24l18 8 19-7 19 7 18-8-5 47-32 21-32-21Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="40" cy="51" r="16" stroke="currentColor" stroke-width="2"/><circle cx="72" cy="51" r="16" stroke="currentColor" stroke-width="2"/><circle cx="40" cy="51" r="5" fill="currentColor"/><circle cx="72" cy="51" r="5" fill="currentColor"/><path d="m50 73 6 7 6-7M32 98h48" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+    <svg class="drop-icon" width="112" height="112" viewBox="0 0 112 112" fill="none" aria-hidden="true">
+      <g stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M30 10h36l20 20v64a8 8 0 0 1-8 8H30a8 8 0 0 1-8-8V18a8 8 0 0 1 8-8Z"/>
+        <path d="M66 10v16a4 4 0 0 0 4 4h16"/>
+        <rect x="34" y="42" width="40" height="28" rx="3"/>
+        <circle cx="45" cy="50" r="3"/>
+        <path d="m35 66 10-10 8 7 9-12 11 15"/>
+      </g>
+      <text x="54" y="90" text-anchor="middle" fill="currentColor" font-family="Segoe UI, sans-serif" font-size="16" font-weight="600" letter-spacing="2">EXR</text>
+    </svg>
     <p>将 EXR 文件或序列文件夹拖放到此处</p>
     <button id="empty-open">浏览文件</button>
     <button id="demo" class="quiet">打开样例</button>

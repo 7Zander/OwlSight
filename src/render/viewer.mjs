@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 import {prepareOcio,disposeOcio,drawOcio} from './ocio.mjs';
 import {Samples} from '../core/perf-metrics.mjs';
-import {imageSamplingGLSL,defaultChannelMap} from './image-layout.mjs';
+import {imageSamplingGLSL,defaultChannelMap,alphaPreviewGLSL} from './image-layout.mjs';
 const vertex = `#version 300 es
 in vec2 position;
 out vec2 uv;
@@ -16,14 +16,16 @@ uniform vec2 range;
 in vec2 uv;
 out vec4 outputColor;
 ${imageSamplingGLSL}
+${alphaPreviewGLSL}
 vec3 srgb(vec3 x) { return mix(12.92*x,1.055*pow(max(x,vec3(0)),vec3(1.0/2.4))-0.055,greaterThan(x,vec3(0.0031308))); }
 void main() {
   vec4 pixel=sourcePixel();
-  vec3 value=component<0?pixel.rgb:vec3(pixel[component]);
-  if(any(isnan(value)) || any(isinf(value))) { outputColor=vec4(1,0,1,1); return; }
+  bool showAlpha=component<0 && channelMap.w>=0 && mode!=2;
+  vec3 value=component<0?(showAlpha?alphaDisplayInput(pixel):pixel.rgb):vec3(pixel[component]);
+  if(any(isnan(value)) || any(isinf(value)) || (showAlpha && (isnan(pixel.a) || isinf(pixel.a)))) { outputColor=vec4(1,0,1,1); return; }
   if(mode==2) value=(value-range.x)/max(range.y-range.x,0.000001);
   else if(mode==1) value=srgb(value*exp2(exposure));
-  outputColor=vec4(clamp(value,0.0,1.0),1);
+  outputColor=vec4(showAlpha?overChecker(value,pixel.a):clamp(value,0.0,1.0),1);
 }`;
 
 export function packView(part, view, maxEdge = Infinity) {
@@ -40,7 +42,7 @@ export function packView(part, view, maxEdge = Infinity) {
       rgba[target + c] = v;
       if (Number.isFinite(v)) { low = Math.min(low, v); high = Math.max(high, v); }
     }
-    rgba[target + 3] = 1;
+    rgba[target + 3] = view.color && view.channels?.A !== undefined ? part.pixels[source + view.channels.A] : 1;
   }
   if (!Number.isFinite(low)) { low = 0; high = 1; }
   return { width, height, rgba, range: [low, high > low ? high : low + 1] };
@@ -72,6 +74,7 @@ export class GpuViewer {
     this.maxTextureSize = gl.getParameter(gl.MAX_TEXTURE_SIZE);
     this.exposure = gl.getUniformLocation(this.program, 'exposure'); this.mode = gl.getUniformLocation(this.program, 'mode'); this.range = gl.getUniformLocation(this.program, 'range');
     this.component=gl.getUniformLocation(this.program,'component');
+    this.checkerSize=gl.getUniformLocation(this.program,'checkerSize');
     this.channelMap=gl.getUniformLocation(this.program,'channelMap');
     gl.uniform1i(gl.getUniformLocation(this.program, 'image'), 0);
   }
@@ -187,7 +190,7 @@ export class GpuViewer {
     for(const [id,entry] of this.resident)this._remove(id,entry);
     this.texture=null;this.size=null;this.prepareDisabled=false;
   }
-  draw({ width, height, zoom = 1, panX = 0, panY = 0, exposure = 0, mode = 1, component = -1, fit = true }) {
+  draw({ width, height, zoom = 1, panX = 0, panY = 0, exposure = 0, mode = 1, component = -1, fit = true, checkerSize = 12 }) {
     if (!this.size || (mode===2&&!this.size.range)) return;
     const drawStarted=performance.now(),gl = this.gl;
     const wCanvas = Math.max(1, Math.round(width)), hCanvas = Math.max(1, Math.round(height));
@@ -198,8 +201,8 @@ export class GpuViewer {
     const w = this.size.width * scale, h = this.size.height * scale;
     gl.viewport(Math.round((width - w) / 2 + panX), Math.round((height - h) / 2 - panY), Math.max(1,Math.round(w)), Math.max(1,Math.round(h)));
     gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,this.texture);
-    if(mode===3&&component<0&&this.ocio){drawOcio(gl,this.ocio,exposure,this.size.channelMap);this.drawSamples.add(performance.now()-drawStarted);return true;}
-    gl.useProgram(this.program); gl.uniform1f(this.exposure, exposure); gl.uniform1i(this.mode, mode); gl.uniform1i(this.component,component); gl.uniform4iv(this.channelMap,this.size.channelMap); gl.uniform2fv(this.range,component>=0&&this.size.ranges?this.size.ranges[component]:(this.size.range||[0,1]));
+    if(mode===3&&component<0&&this.ocio){drawOcio(gl,this.ocio,exposure,this.size.channelMap,checkerSize);this.drawSamples.add(performance.now()-drawStarted);return true;}
+    gl.useProgram(this.program); gl.uniform1f(this.exposure, exposure); gl.uniform1i(this.mode, mode); gl.uniform1i(this.component,component); gl.uniform1f(this.checkerSize,checkerSize); gl.uniform4iv(this.channelMap,this.size.channelMap); gl.uniform2fv(this.range,component>=0&&this.size.ranges?this.size.ranges[component]:(this.size.range||[0,1]));
     gl.drawArrays(gl.TRIANGLES, 0, 6);this.drawSamples.add(performance.now()-drawStarted);return true;
   }
   perfSnapshot(){return {textureFrames:this.resident.size,budgetMiB:this.cacheBytes/1024**2,frameLimit:this.cacheFrames,uploadSubmit:this.uploadSamples.snapshot(true),drawSubmit:this.drawSamples.snapshot(true),timingBoundary:'CPU calls; no GPU synchronization'};}

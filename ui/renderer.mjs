@@ -101,7 +101,7 @@ function refreshStage() {
 function draw() {
   if (!frame || state.grid || !gpu || (textureIndex !== state.selected && !sequence.playing)) return;
   const dpr = devicePixelRatio;
-  const drawn=gpu.draw({ width: stageW, height: stageH, zoom, panX: panX * dpr, panY: panY * dpr, exposure: +$('exposure').value, mode: colorMode(presentedView || views[state.selected]), component:componentIndex(presentedView || views[state.selected]), fit });
+  const drawn=gpu.draw({ width: stageW, height: stageH, zoom, panX: panX * dpr, panY: panY * dpr, checkerSize: 12 * dpr, exposure: +$('exposure').value, mode: colorMode(presentedView || views[state.selected]), component:componentIndex(presentedView || views[state.selected]), fit });
   if(drawn)submitted(presentedView||views[state.selected]);
 }
 function resetView() { zoom = 1; panX = panY = 0; fit = true; draw(); }
@@ -119,7 +119,7 @@ function updateView() {
   if (!has) return;
   const view = sequence.playing && presentedView ? presentedView : views[state.selected], part = frame.parts[view.part];
   setText($('image-label'), view.label + (view.component ? ` · ${view.component}` : '') + (sequence.switching ? ' · 切换中…' : ''));
-  setText($('status'), $('display-mode').value==='ocio' ? color?.status(view) || 'OCIO 准备中' : colorMode(view) === 2 ? '范围映射 · 非原始亮度 · 非 OCIO' : '基础预览 · RGB 忽略 Alpha · 非 OCIO');
+  setText($('status'), $('display-mode').value==='ocio' ? color?.status(view) || 'OCIO 准备中' : colorMode(view) === 2 ? '范围映射 · 非原始亮度 · 非 OCIO' : '基础预览 · 非 OCIO');
   setText($('metadata'), `${part.width} × ${part.height}  ·  ${frame.parts.length} Part  ·  ${frame.parts.reduce((n,p)=>n+p.channels.length,0)} 通道  ·  ${state.selected + 1}/${views.length}  ·  ${Math.round(frame.decodeMs)} ms 解码`);
   if(state.grid)document.querySelectorAll('[data-view]').forEach(el => {
     const selected = Number(el.dataset.view) === state.selected;
@@ -130,7 +130,7 @@ function updateView() {
     const index = Number(item.dataset.menuView), layer = views[index];
     if (!layer) return;
     item.setAttribute('aria-checked', String(index === state.selected));
-    item.textContent = `${index === state.selected ? '✓  ' : ''}${layer.label}${layer.kind === 'group' ? '  [组合]' : ''}`;
+    item.textContent = `${index === state.selected ? '✓  ' : ''}${layer.label}`;
   });
   if (state.grid) ensureGrid(); else { ensureMainPreview(); draw(); }
 }
@@ -373,7 +373,7 @@ document.querySelectorAll('[data-component]').forEach(button => button.onclick =
 function menuItems() {
   const scrollTop = $('context-items').scrollTop;
   $('context-items').replaceChildren();
-  views.forEach((view,index) => { const item = document.createElement('button'); item.setAttribute('role','menuitemradio'); item.dataset.menuView = index; item.setAttribute('aria-checked', String(index === state.selected)); item.textContent = `${index === state.selected ? '✓  ' : ''}${view.label}${view.kind === 'group' ? '  [组合]' : ''}`; item.onclick = () => { setSelection(index); }; $('context-items').append(item); });
+  views.forEach((view,index) => { const item = document.createElement('button'); item.setAttribute('role','menuitemradio'); item.dataset.menuView = index; item.setAttribute('aria-checked', String(index === state.selected)); item.textContent = `${index === state.selected ? '✓  ' : ''}${view.label}`; item.onclick = () => { setSelection(index); }; $('context-items').append(item); });
   $('context-items').scrollTop = scrollTop;
 }
 $('stage').addEventListener('contextmenu', event => {

@@ -1,6 +1,6 @@
-# OwlSight alpha_v0.1.0 使用说明
+# OwlSight alpha_v0.1.1 使用说明
 
-软件版本：`0.1.0-alpha.1`。Windows x64 便携版，解压整个文件夹后运行 `OwlSight.exe`，无需另外安装 Node.js 或 Python。建议放在可写目录，方便保存本地性能日志。
+软件版本：`0.1.1-alpha.1`。Windows x64 便携版，解压整个文件夹后运行 `OwlSight.exe`，无需另外安装 Node.js 或 Python。建议放在可写目录，方便保存本地性能日志。
 
 ## 打开素材
 
@@ -38,7 +38,7 @@
 
 右键 → 显示设置可调整曝光、Raw / 范围映射和 OCIO。内置 ACES 配置，也可加载本地 `.ocio` 及其 LUT；Input、Display、View、Look 按素材与工作流程选择，不会根据 Blender 文件名自动推断输入空间。Raw、数据图层及单分量绕过 OCIO 调色。
 
-RGB 显示忽略 Alpha，Alpha 可单独灰度查看。范围映射只方便查看数据，不改变源像素；NaN / Inf 显示为洋红色。当前以 Data Window 显示图像，没有放回完整 Display Window。输出为 SDR，不包含显示器 ICC 或 HDR 管理。
+RGBA 预览中，有 Alpha 的图层会在透明区域显示灰色棋盘格，适用于主画面、网格与 OCIO；没有 Alpha 的图层保持不透明。R / G / B / A 分量与范围映射保持数据查看，不叠加棋盘格。半透明颜色按 [OpenEXR 的预乘 Alpha 约定](https://openexr.com/en/latest/TechnicalIntroduction.html#premultiplied-vs-un-premultiplied-color-channels)处理：先还原颜色，再进行显示变换并叠到棋盘格上；Alpha 为零但 RGB 非零的发光贡献保留。当前不提供 Straight Alpha 的切换选项。范围映射只方便查看数据，不改变源像素；NaN / Inf 显示为洋红色。当前以 Data Window 显示图像，没有放回完整 Display Window。输出为 SDR，不包含显示器 ICC 或 HDR 管理。
 
 ## EXR 默认打开方式
 
@@ -48,7 +48,7 @@ RGB 显示忽略 Alpha，Alpha 可单独灰度查看。范围映射只方便查�
 
 日志默认开启，位于 `OwlSight.exe` 同目录的 `logs`。设置中的“打开目录”可直接查看；目录不可写会提示，不会改存其他位置。单个日志文件上限 8 MiB，旧日志不会自动删除。日志包含环境、性能及素材路径，分享前请自行检查并脱敏。
 
-为延续已有设置，当前用户配置仍使用 `%APPDATA%/OwlSight-Prototype`。该名称是兼容路径，不表示本版本仍处于原型阶段。换用新版前关闭旧版，完整解压到独立目录；原程序目录可保留以便回退。不要把用户 EXR 或日志放进待公开发布的源码与程序目录。
+用户配置与 Chromium 本地数据现在保存在 `%APPDATA%/OwlSight`。首次使用新版时，自动从旧的 `OwlSight-Prototype` 目录复制查看设置与 OCIO 设置，仅补充新目录中不存在的设置文件；保留旧目录，不覆盖新设置。界面提示等浏览器本地偏好恢复默认，可在设置中重新调整。换用新版前关闭旧版，完整解压到独立目录；原程序目录可保留以便回退。不要把用户 EXR 或日志放进待公开发布的源码与程序目录。
 
 ## 已知限制
 
@@ -56,7 +56,7 @@ RGB 显示忽略 Alpha，Alpha 可单独灰度查看。范围映射只方便查�
 - 单文件读取上限 256 MiB，图像最长边 16384，最多约 3200 万像素；全通道解码预算 1024 MiB。
 - UINT 经解码转换为 float32，不能保证大整数逐位精确。
 - 未缓存图层、首次读取、大文件和慢磁盘可能等待，不保证固定实时帧率。
-- 无目录实时监视、Alpha 合成、安装器、自动更新或快捷键自定义。
+- 无目录实时监视、多图层合成、安装器、自动更新或快捷键自定义。
 - 当前程序未签名，跨机器、网络盘与全部 EXR 格式组合的兼容性仍需维护者和早期使用者验证。
 
 程序不改写源 EXR。Alpha 功能与兼容性可能调整，具体变更见 `CHANGELOG.md`。

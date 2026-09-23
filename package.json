@@ -1,8 +1,8 @@
 {
   "name": "owlsight",
-  "version": "0.1.0-alpha.1",
-  "releaseName": "alpha_v0.1.0",
-  "description": "OwlSight EXR image and sequence viewer — alpha_v0.1.0",
+  "version": "0.1.1-alpha.1",
+  "releaseName": "alpha_v0.1.1",
+  "description": "OwlSight EXR image and sequence viewer — alpha_v0.1.1",
   "license": "GPL-3.0-or-later",
   "author": "OwlSight contributors",
   "main": "src/app/main.cjs",
