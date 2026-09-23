@@ -4,6 +4,9 @@
 
 **这是一个面向 CG / VFX 工作流的 EXR 图像与序列查看器。**
 ## 介绍
+![Uploading Interface preview3.jpg…]()
+![Uploading Interface preview2.jpg…]()
+![Uploading Interface preview.jpg…]()
 
 
 OwlSight 专注于快速查看渲染结果。将其设为 EXR 默认打开方式后，可以双击文件打开；也可以直接把 EXR 拖入窗口，查看各个通道和播放图像序列。使用快捷键切换通道与预览分辨率，并通过 OpenColorIO 调整色彩显示。
