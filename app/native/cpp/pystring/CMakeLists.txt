@@ -1,0 +1,5 @@
+cmake_minimum_required(VERSION 3.24)
+project(OwlSightPystring LANGUAGES CXX)
+add_library(pystring STATIC "${PYSTRING_SOURCE}/pystring.cpp")
+install(TARGETS pystring ARCHIVE DESTINATION lib)
+install(FILES "${PYSTRING_SOURCE}/pystring.h" DESTINATION include/pystring)

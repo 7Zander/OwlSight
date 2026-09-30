@@ -1,30 +1,45 @@
-# Dependencies and generated files
-/node_modules/
-/build/
-/dist/
-/resources/decoder/
-/logs/
-__pycache__/
+# Publish only current native source and essential repository files.
+/*
+!/.gitattributes
+!/.gitignore
+!/LICENSE
+!/README.md
+!/THIRD_PARTY_NOTICES.md
+!/app/
+/app/*
+!/app/native/
+!/app/scripts/
+!/app/third_party/
+!/app/release.json
+
+# Generated plans and agent records stay local.
+*.md
+!/README.md
+!/THIRD_PARTY_NOTICES.md
+!/app/third_party/licenses/*LICENSE.md
+!/app/third_party/licenses/**/THIRD-PARTY.md
+
+# Tools, build output, media and personal data.
+**/build/
+**/dist/
+**/node_modules/
+**/logs/
+**/settings/
+**/__pycache__/
+**/.agents/
+**/.codex/
+**/.scratch/
+*.exr
+*.jsonl
+*.log
 *.pyc
+*.exe
+*.dll
+*.obj
+*.pdb
 *.zip
-
-# Private media and local tools
-/tests/private-fixtures/
-/.scratch/
-/.vs/
-/.vscode/
-Thumbs.db
+*.7z
+*.user
+*.suo
 .DS_Store
-
-# Local assistant context must stay out of the public repository
-AGENTS.md
-CLAUDE.md
-CONTEXT.md
-OWLSIGHT_ALPHA_PLAN.md
-/.agents/
-/.codex/
-/.claude/
-/docs/agents/
-/docs/adr/
-/docs/research/
-/docs/ITERATION_LOG.md
+Thumbs.db
