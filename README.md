@@ -1,6 +1,6 @@
 # OwlSight
 
-OwlSight v0.2.0 / build-0030 是 Windows x64 的 EXR 查看器，使用 C++ 与 Qt Quick。支持图像序列播放、通道切换、静态通道网格及 OpenColorIO 显示变换。
+OwlSight  是 一个专注于快速查看 的 EXR序列 查看器，使用 C++ 与 Qt Quick。支持图像序列播放、通道切换、静态通道网格及 OpenColorIO 显示变换。
 
 ## 操作
 
