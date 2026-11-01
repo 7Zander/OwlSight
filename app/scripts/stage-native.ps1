@@ -10,6 +10,6 @@ $exe=Join-Path $BuildDirectory 'OwlSight.exe'
 $env:PATH="$qt/bin;$toolchain/bin;$toolchain/x86_64-w64-mingw32/bin;$env:PATH"
 # Keep matching SDK binaries intact: windeployqt misidentifies these LLVM SDK
 # plugins as debug. Resolve imports without rewriting DLL metadata.
-& node "$PSScriptRoot/deploy-qt-runtime.mjs" --qt $qt --toolchain $toolchain --exe $exe --qml "$SourceRoot/native/desktop/qml" --destination $StagingDirectory --plan (Join-Path $BuildDirectory 'deployment-imports')
+& node "$PSScriptRoot/deploy-qt-runtime.mjs" --qt $qt --toolchain $toolchain --exe $exe --updater (Join-Path $BuildDirectory 'OwlSightUpdater.exe') --qml "$SourceRoot/native/desktop/qml" --destination $StagingDirectory --plan (Join-Path $BuildDirectory 'deployment-imports')
 if($LASTEXITCODE -ne 0){throw 'Qt runtime deployment failed; incomplete staging is preserved for diagnosis.'}
 Write-Output $StagingDirectory

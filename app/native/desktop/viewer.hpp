@@ -51,6 +51,7 @@ public:
     Q_INVOKABLE void command(const QString& name,const QVariant& value=QVariant());
     Q_INVOKABLE void open(const QUrl& url);
     void tick();
+    bool busyForUpdates() const { return playing||opening; }
 signals:
     void changed();
     void changedFast();

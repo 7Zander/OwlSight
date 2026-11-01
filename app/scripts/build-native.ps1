@@ -16,6 +16,7 @@ if(!(Test-Path "$prefix/lib/libOpenColorIO.a")){
 $staticZlib=Join-Path $prefix 'lib/libzlibstatic.a'
 if(!(Test-Path -LiteralPath $staticZlib -PathType Leaf)){throw 'The required static zlib archive is missing. Rebuild OCIO dependencies.'}
 $env:PATH="$QtRoot/bin;$env:OWLSIGHT_CPP_TOOLCHAIN;$env:PATH"
+& "$PSScriptRoot/build-icons.ps1" -QtRoot $QtRoot -BuildDirectory (Join-Path $BuildDirectory 'icon-builder')
 $argsList=@('-S',"$SourceRoot/native/desktop",'-B',$BuildDirectory,'-G','Ninja','-DCMAKE_BUILD_TYPE=Release',
  "-DCMAKE_MAKE_PROGRAM=$env:OWLSIGHT_NINJA",
  "-DCMAKE_C_COMPILER=$env:OWLSIGHT_CPP_TOOLCHAIN/x86_64-w64-mingw32-clang.exe",
@@ -31,6 +32,6 @@ if($LASTEXITCODE){throw 'Native configuration failed.'}
 & $env:OWLSIGHT_CMAKE --build $BuildDirectory --target OwlSight --parallel 8
 if($LASTEXITCODE){throw 'Native compilation failed.'}
 $builtExe=Join-Path $BuildDirectory 'OwlSight.exe'
-$buildRecord=[ordered]@{version=$Release.version;build=[int]$Release.build;sha256=(Get-FileHash -LiteralPath $builtExe -Algorithm SHA256).Hash.ToLowerInvariant()}
+$buildRecord=[ordered]@{version=$Release.version;build=[int]$Release.build;sha256=(Get-FileHash -LiteralPath $builtExe -Algorithm SHA256).Hash.ToLowerInvariant();updaterSHA256=(Get-FileHash -LiteralPath (Join-Path $BuildDirectory 'OwlSightUpdater.exe') -Algorithm SHA256).Hash.ToLowerInvariant()}
 [IO.File]::WriteAllText((Join-Path $BuildDirectory 'build-info.json'),($buildRecord|ConvertTo-Json),[Text.UTF8Encoding]::new($false))
 Write-Output $builtExe

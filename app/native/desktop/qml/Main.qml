@@ -12,6 +12,7 @@ ApplicationWindow {
     flags: Qt.Window | Qt.FramelessWindowHint
     font.family: "Microsoft YaHei UI"; font.pixelSize: 13
     property var s: viewer.state
+    property var u: updates.state
     property bool pinned: false
     property bool full: visibility === Window.FullScreen
     property real zoom: 1
@@ -97,8 +98,9 @@ ApplicationWindow {
         id: titlebar
         height: win.full ? 0 : 32; visible: !win.full; color: "#222222"; width: parent.width
         MouseArea { anchors.fill: parent; anchors.rightMargin: 144; onPressed: win.startSystemMove(); onDoubleClicked: win.visibility===Window.Maximized?win.showNormal():win.showMaximized() }
-        Text { x: 13; anchors.verticalCenter: parent.verticalCenter; text: "OwlSight"; color: "#888"; font.pixelSize: 11 }
-        Text { x: 76; width: parent.width-235; anchors.verticalCenter: parent.verticalCenter; text: s.title; elide: Text.ElideMiddle; color: "#666"; font.pixelSize: 11 }
+        Image { x:10; width:19; height:19; anchors.verticalCenter:parent.verticalCenter; source:"qrc:/branding/owlsight.svg"; sourceSize:Qt.size(32,32) }
+        Text { x: 35; anchors.verticalCenter: parent.verticalCenter; text: "OwlSight"; color: "#888"; font.pixelSize: 11 }
+        Text { x: 98; width: parent.width-257; anchors.verticalCenter: parent.verticalCenter; text: s.title; elide: Text.ElideMiddle; color: "#666"; font.pixelSize: 11 }
         Row {
             anchors.right: parent.right
             Repeater {
@@ -360,6 +362,13 @@ ApplicationWindow {
                             Item{Layout.fillWidth:true}
                             OwlButton{text:"打开目录";quiet:true;font.pixelSize:10;onClicked:act("logs")}
                         }
+                        SettingsDivider{}
+                        RowLayout{Layout.fillWidth:true
+                            Caption{text:"OwlSight v"+u.currentVersion;Layout.fillWidth:true}
+                            OwlButton{text:u.busy?"正在更新…":"检查更新";font.pixelSize:11;onClicked:updates.check()}
+                        }
+                        HintCheck{text:"自动检查更新";checked:u.automatic;onToggled:updates.setAutomatic(checked)}
+                        Caption{text:u.status;Layout.fillWidth:true;wrapMode:Text.Wrap;font.pixelSize:10;color:"#8da5aa"}
                         Caption{text:s.status;visible:text!=="";Layout.fillWidth:true;elide:Text.ElideRight;font.pixelSize:10;color:"#7f9298";ToolTip.visible:statusHover.hovered;ToolTip.text:text;HoverHandler{id:statusHover}}
                     }
                 }
@@ -374,6 +383,26 @@ ApplicationWindow {
             Text{text:"操作未完成";color:"#d7c1b2";font.pixelSize:15}
             Text{text:s.error;Layout.fillWidth:true;wrapMode:Text.WrapAnywhere;color:"#d7c1b2"}
             RowLayout{OwlButton{text:"复制详情";quiet:true;onClicked:act("copyError")} Item{Layout.fillWidth:true} OwlButton{text:"关闭";Layout.preferredWidth:92;onClicked:act("clearError")}}
+        }
+    }
+    Connections{target:updates;function onShowRequested(){updateBox.open()}}
+    Popup{
+        id:updateBox;anchors.centerIn:Overlay.overlay;width:Math.min(520,win.width-32);padding:22;modal:true
+        closePolicy:Popup.CloseOnEscape
+        background:Rectangle{radius:5;color:"#252525";border.color:"#4c6269"}
+        contentItem:ColumnLayout{spacing:14
+            Text{text:u.available?"OwlSight v"+u.version:"软件更新";color:"#c4d2d5";font.pixelSize:16}
+            Text{text:u.status;textFormat:Text.PlainText;Layout.fillWidth:true;wrapMode:Text.Wrap;color:"#aaa"}
+            ScrollView{visible:u.notes!=="";Layout.fillWidth:true;Layout.preferredHeight:145;clip:true
+                Text{text:u.notes;textFormat:Text.PlainText;width:updateBox.availableWidth;wrapMode:Text.Wrap;color:"#a8a8a8";font.pixelSize:12}
+            }
+            ProgressBar{visible:u.phase==="downloading";Layout.fillWidth:true;value:u.progress}
+            Text{visible:u.available&&!u.busy;text:"安装更新将关闭 OwlSight。安装向导会保留已有设置，并提示关闭其他实例。";Layout.fillWidth:true;wrapMode:Text.Wrap;color:"#888";font.pixelSize:11}
+            RowLayout{Layout.fillWidth:true;Item{Layout.fillWidth:true}
+                OwlButton{text:u.busy?"取消":"稍后";quiet:true;onClicked:{if(u.busy)updates.cancel();updateBox.close()}}
+                OwlButton{visible:u.available&&!u.busy;text:u.downloaded?"退出并安装":"下载并安装";onClicked:updates.download()}
+                OwlButton{visible:!u.available&&!u.busy;text:"关闭";onClicked:updateBox.close()}
+            }
         }
     }
     FileDialog{id:files;title:"打开 EXR";nameFilters:["OpenEXR (*.exr)"];onAccepted:{fitImage();viewer.open(selectedFile)}}

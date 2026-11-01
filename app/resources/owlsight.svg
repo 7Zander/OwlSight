@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 48 48" fill="none" role="img" aria-labelledby="title desc">
+  <title id="title">OwlSight</title>
+  <desc id="desc">Three offset image frames in muted teal, with a transparent central viewing window.</desc>
+  <!-- Transparent vector master; geometry aligned to a 48-unit application-icon grid. -->
+  <path fill="#B2D1D6" d="M6.75 4H23.75Q24.5 4 24.5 4.75V4.9Q24.5 5.5 23.9 5.5H8.25Q7.5 5.5 7.5 6.25V28.4Q7.5 29 6.9 29H6.6Q6 29 6 28.4V4.75Q6 4 6.75 4Z"/>
+  <path fill="#729FA9" d="M9.25 6.5H26.25Q27 6.5 27 7.25V7.4Q27 8 26.4 8H10.75Q10 8 10 8.75V30.9Q10 31.5 9.4 31.5H9.1Q8.5 31.5 8.5 30.9V7.25Q8.5 6.5 9.25 6.5Z"/>
+  <path fill="#0C5362" d="M11.75 9H27.75Q28.5 9 28.5 9.75V16.75H23V38.25H28.5V41.5H11.75Q11 41.5 11 40.75V9.75Q11 9 11.75 9Z"/>
+  <path fill="#95BEC6" d="M28.5 13H40.25Q41 13 41 13.75V44.25Q41 45 40.25 45H25.25Q24.5 45 24.5 44.25V38.25H29.75V16.75H28.5Z"/>
+</svg>

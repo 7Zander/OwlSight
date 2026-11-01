@@ -7,9 +7,9 @@ import { createHash } from 'node:crypto';
 import { parseArgs } from 'node:util';
 
 const { values } = parseArgs({ options: Object.fromEntries(
-  ['qt', 'toolchain', 'exe', 'qml', 'destination', 'plan'].map(key => [key, { type: 'string' }])
+  ['qt', 'toolchain', 'exe', 'updater', 'qml', 'destination', 'plan'].map(key => [key, { type: 'string' }])
 ) });
-for (const key of ['qt', 'toolchain', 'exe', 'qml', 'destination', 'plan']) {
+for (const key of ['qt', 'toolchain', 'exe', 'updater', 'qml', 'destination', 'plan']) {
   if (!values[key]) throw new Error(`Missing --${key}`);
   values[key] = path.resolve(values[key]);
 }
@@ -73,6 +73,7 @@ for (const name of ['QtQuick', 'QtQuick.Controls', 'QtQuick.Controls.Basic', 'Qt
 }
 fs.mkdirSync(destination, { recursive: true });
 copy(exe, path.join(destination, 'OwlSight.exe'));
+copy(values.updater, path.join(destination, 'OwlSightUpdater.exe'));
 for (const module of modules) {
   const relative = inside(plan, path.resolve(module.path));
   copyModule(path.resolve(module.path), path.join(destination, 'qml', relative));

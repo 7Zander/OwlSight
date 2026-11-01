@@ -1,0 +1,6 @@
+cmake_minimum_required(VERSION 3.24)
+project(OwlSightIconBuilder LANGUAGES CXX)
+set(CMAKE_CXX_STANDARD 17)
+find_package(Qt6 6.11.3 EXACT REQUIRED COMPONENTS Gui Svg)
+add_executable(owlsight-icon-builder icon-builder.cpp)
+target_link_libraries(owlsight-icon-builder PRIVATE Qt6::Gui Qt6::Svg)
