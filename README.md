@@ -1,6 +1,6 @@
 # OwlSight
 
-轻量的 Windows EXR 图像与序列查看器，支持通道查看、序列播放和 OpenColorIO 色彩管理。
+轻量的 Windows EXR 图像与序列查看器，用于快速检阅各个通道、序列播放和 OpenColorIO 色彩管理。
 
 ![OwlSight 使用预览](assets/preview.webp)
 
