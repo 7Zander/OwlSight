@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: GPL-3.0-or-later
+﻿# SPDX-License-Identifier: GPL-3.0-or-later
 # Dot-source to keep process-local build settings: . ./scripts/prepare-cpp-tools.ps1
 param([string]$SdkRoot = (Join-Path $PSScriptRoot '../build/cpp-sdk'))
 $ErrorActionPreference = 'Stop'

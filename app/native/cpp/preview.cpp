@@ -120,7 +120,8 @@ PreviewResult Preview::result(const Json& request) {
     metadata["diagnostics"] = {{"timing",timing},{"headerCacheHit",headerHit},{"planeCacheHit",planeHit},
         {"sourceWidth",part.width},{"sourceHeight",part.height},{"compression",part.metadata.at("compression")},
         {"decodedPixelType",source->half?"float16":"float32"},{"outputPixelType",output->half?"float16":"float32"},
-        {"outputBytes",output->byteSize()},{"planeCacheBytes",planeBytes_},{"fileBytes",Json::parse(info.key).at(1)},
+        {"outputBytes",output->byteSize()},{"sourcePlaneBytes",source->byteSize()},
+        {"previewCopyBytes",output==source?0:output->byteSize()},{"planeCacheBytes",planeBytes_},{"fileBytes",Json::parse(info.key).at(1)},
         {"resources",processSample()},{"decoder","cpp-openexr"},{"decoderVersion","0.2.0"}};
     metadata["diagnostics"]["pixelHandoffCopyBytes"]=0;
     return {std::move(metadata),std::move(output)};

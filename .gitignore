@@ -1,38 +1,15 @@
-# Publish only current native source and essential repository files.
-/*
-!/.gitattributes
-!/.gitignore
-!/LICENSE
-!/README.md
-!/THIRD_PARTY_NOTICES.md
-!/app/
-/app/*
-!/app/native/
-!/app/scripts/
-!/app/third_party/
-!/app/release.json
-
-# Generated plans and agent records stay local.
-*.md
-!/README.md
-!/THIRD_PARTY_NOTICES.md
-!/app/third_party/licenses/*LICENSE.md
-!/app/third_party/licenses/**/THIRD-PARTY.md
-
-# Tools, build output, media and personal data.
 **/build/
 **/dist/
 **/node_modules/
-**/logs/
 **/settings/
-**/__pycache__/
+**/logs/
 **/.agents/
 **/.codex/
-**/.scratch/
+AGENTS.md
+agents.md
 *.exr
 *.jsonl
 *.log
-*.pyc
 *.exe
 *.dll
 *.obj
@@ -43,3 +20,4 @@
 *.suo
 .DS_Store
 Thumbs.db
+/app/third_party/licenses/**/README.md

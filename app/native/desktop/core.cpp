@@ -9,6 +9,7 @@
 #include <cstring>
 #include <map>
 #include <regex>
+#include <system_error>
 #include <set>
 #include <limits>
 namespace owl {
@@ -31,6 +32,9 @@ std::shared_ptr<Frame> decode(Preview& decoder,const Json& request){
         frame->width=frame->pixels->width;frame->height=frame->pixels->height;
         frame->channels=int(frame->pixels->channels.size());frame->half=frame->pixels->half;
         frame->mapping=frame->metadata.at("channelMap").get<std::array<int,4>>();
+        const auto& diagnostics=frame->metadata.at("diagnostics");
+        frame->decodeWorkingBytes=diagnostics.value("sourcePlaneBytes",frame->bytes())+
+            diagnostics.value("previewCopyBytes",size_t(0))+32*MiB;
         frame->metadata["diagnostics"]["rgbaPackMs"]=0;
         frame->metadata["diagnostics"]["rgbaReorderCopyBytes"]=0;
         frame->metadata["diagnostics"]["liveUniquePixelBytes"]=Plane::liveBytes();
@@ -129,7 +133,21 @@ Sequence discover(const std::string& input,const std::function<bool()>& current)
         seq.gaps=span-static_cast<long long>(seq.files.size());return seq;
     }catch(const std::exception& error){if(!current())throw;result.warning=error.what();return result;}
 }
-Engine::Engine(){for(int i=0;i<2;++i)workers_.emplace_back([this]{work();});}
+Engine::Engine(){
+    const char* disabled=std::getenv("OWLSIGHT_DISABLE_FOREGROUND_WORKER");
+    foregroundWorkerEnabled_=!disabled||std::strcmp(disabled,"1")!=0;
+    workers_.reserve(3);
+    std::unique_lock lock(mutex_);
+    try{
+        for(int i=0;i<2;++i)workers_.emplace_back([this,i]{work(false,i);});
+        if(foregroundWorkerEnabled_){
+            try{workers_.emplace_back([this]{work(true,2);});}
+            catch(const std::system_error& error){foregroundWorkerEnabled_=false;foregroundWorkerFallback_=error.what();}
+        }
+    }catch(...){
+        stopping_=true;lock.unlock();wake_.notify_all();for(auto& t:workers_)t.join();throw;
+    }
+}
 Engine::~Engine(){{std::lock_guard lock(mutex_);stopping_=true;jobs_.clear();++epoch_;}wake_.notify_all();for(auto& t:workers_)t.join();}
 void Engine::cancelQueued(std::deque<Job>::iterator it){
     auto p=pending_.find(std::to_string(it->epoch)+"|"+it->key);
@@ -138,7 +156,7 @@ void Engine::cancelQueued(std::deque<Job>::iterator it){
 }
 uint64_t Engine::reset(){
     std::lock_guard lock(mutex_);++epoch_;while(!jobs_.empty())cancelQueued(jobs_.begin());
-    done_.clear();transient_.reset();transientKey_.clear();return epoch_;
+    done_.clear();transient_.reset();transientKey_.clear();footprints_.clear();prefetchWaitReason_.clear();return epoch_;
 }
 void Engine::open(const std::string& file,uint64_t epoch){
     std::lock_guard lock(mutex_);Job job{"@open",{{"file",file}},epoch,true,0,""};
@@ -181,10 +199,31 @@ void Engine::retainQueued(const std::unordered_set<std::string>& keys){
     for(auto it=jobs_.begin();it!=jobs_.end();){if(it->open||keys.count(it->key)){++it;continue;}cancelQueued(it);it=jobs_.begin();}
 }
 void Engine::setBackgroundLimit(int limit){std::lock_guard lock(mutex_);backgroundLimit_=std::clamp(limit,1,2);wake_.notify_all();}
+void Engine::updatePrefetchBudget(size_t displayReserveBytes){
+    std::lock_guard lock(mutex_);prefetchBudget_.update(displayReserveBytes);wake_.notify_all();
+}
+size_t Engine::prefetchCapacity(size_t frameBytes){
+    std::lock_guard lock(mutex_);
+    if(prefetchBudget_.enabled()){
+        auto known=footprints_.find(activeCtx_);
+        if(known!=footprints_.end())frameBytes=std::max(frameBytes,known->second.outputBytes);
+    }
+    size_t capacity=std::max(size_t(1),budget_/std::max(size_t(1),frameBytes));
+    // A retained displayed frame outside the forward window needs its own slot.
+    if(prefetchBudget_.enabled()&&activeShown_>=0&&activeShown_!=activeHead_&&size_t(distance(activeShown_))>=capacity)
+        capacity=std::max(size_t(1),capacity-1);
+    prefetchCapacity_=capacity;return capacity;
+}
 void Engine::setPlayHead(const std::string& context,int head,int length,bool loop,int shown,int protectAhead){
     std::lock_guard lock(mutex_);
     if(context!=activeCtx_||head!=activeHead_){transient_.reset();transientKey_.clear();}
     activeCtx_=context;activeHead_=head;activeShown_=shown;activeLength_=std::max(1,length);activeLoop_=loop;protectAhead_=std::max(0,protectAhead);
+    if(foregroundWorkerEnabled_){
+        for(auto it=jobs_.begin();it!=jobs_.end();){
+            if(it->foreground&&!it->open&&!currentTarget(*it)){cancelQueued(it);it=jobs_.begin();}else ++it;
+        }
+        wake_.notify_all();
+    }
 }
 std::vector<Completion> Engine::take(){std::lock_guard lock(mutex_);std::vector<Completion> out;while(!done_.empty()){out.push_back(std::move(done_.front()));done_.pop_front();}return out;}
 void Engine::setBudget(size_t bytes){std::lock_guard lock(mutex_);budget_=std::clamp(bytes,size_t(128*MiB),size_t(64ULL*1024*MiB));trim();}
@@ -195,13 +234,21 @@ int Engine::distance(int position) const {
     return activeLoop_?(d+activeLength_)%activeLength_:(d<0?activeLength_-d:d);
 }
 Json Engine::statistics(){
-    std::lock_guard lock(mutex_);size_t active=0,otherRunning=0;
+    std::lock_guard lock(mutex_);size_t active=0,otherRunning=0,dedicatedRunning=0;
     for(const auto& [key,e]:cache_)if(e.ctx==activeCtx_)active+=e.frame->bytes();
-    for(const auto& [id,j]:running_)if(!j.open&&j.ctx!=activeCtx_)++otherRunning;
+    for(const auto& [id,j]:running_){if(!j.open&&j.ctx!=activeCtx_)++otherRunning;if(j.foregroundWorker)++dedicatedRunning;}
+    const auto background=runningBackground();
     return {{"queued",jobs_.size()},{"running",running_.size()},{"otherLayerRunning",otherRunning},{"completed",completed_},
         {"cancelledQueued",cancelled_},{"deduplicatedRequests",deduplicated_},{"evictions",evicted_},{"activeCacheBytes",active},
         {"otherCacheBytes",bytes_-active},{"cacheLogicalBytes",bytes_},{"liveUniquePixelBytes",Plane::liveBytes()},
-        {"backgroundLimit",backgroundLimit_},{"decodeLimit",2},{"cacheBudgetBytes",budget_},{"transientBytes",transient_?transient_->bytes():0}};
+        {"backgroundLimit",backgroundLimit_},{"decodeLimit",decodeLimit()},{"foregroundWorkerEnabled",foregroundWorkerEnabled_},
+        {"foregroundWorkerFallback",foregroundWorkerFallback_},{"foregroundRunning",running_.size()-background},{"backgroundRunning",background},
+        {"dedicatedForegroundRunning",dedicatedRunning},{"peakRunning",peakRunning_},{"cancelledBeforeDecode",cancelledBeforeDecode_},
+        {"cacheBudgetBytes",budget_},{"transientBytes",transient_?transient_->bytes():0},
+        {"prefetchMemory",prefetchBudget_.statistics()},{"prefetchWaitReason",prefetchWaitReason_},
+        {"prefetchCapacity",prefetchCapacity_},{"reservedOutputBytes",reservedOutputBytes()},
+        {"runningDecodeEstimateBytes",runningDecodeBytes()},{"prefetchReclaims",prefetchReclaims_},
+        {"prefetchDiscarded",prefetchDiscarded_}};
 }
 void Engine::trim(){
     while(bytes_>budget_&&!cache_.empty()){
@@ -229,26 +276,112 @@ void Engine::trim(){
         bytes_-=victim->second.frame->bytes();cache_.erase(victim);++evicted_;
     }
 }
-void Engine::work(){
+// Called with mutex_ held. The dedicated worker shares the queue and pending_
+// with the general workers, so promoting a request never duplicates a decode.
+bool Engine::currentTarget(const Job& job) const {
+    return job.epoch==epoch_&&(job.open||(job.ctx==activeCtx_&&job.pos==activeHead_));
+}
+size_t Engine::runningBackground() const {
+    return size_t(std::count_if(running_.begin(),running_.end(),[](const auto& item){return !item.second.foreground;}));
+}
+DecodeFootprint Engine::footprintFor(const Job& job) const {
+    auto known=footprints_.find(job.ctx);
+    return known==footprints_.end()?DecodeFootprint{}:known->second;
+}
+bool Engine::guardPrefetch(const Job& job) const {
+    // Static grid loading retains build-0030's scheduling behavior.
+    return prefetchBudget_.enabled()&&!job.foreground&&!job.open&&job.payload.value("maxEdge",0)==0;
+}
+bool Engine::prefetchEvictable(const Entry& entry,const Job& job) const {
+    // Idle cross-layer work may consume free capacity, never displace playback.
+    if(job.ctx!=activeCtx_)return false;
+    if(entry.ctx!=activeCtx_)return true;
+    if(entry.pos==activeHead_||entry.pos==activeShown_)return false;
+    return distance(entry.pos)>std::max(protectAhead_,distance(job.pos));
+}
+size_t Engine::reservedOutputBytes() const {
+    size_t bytes=0;
+    for(const auto& [id,job]:running_)if(job.epoch==epoch_&&!job.open&&!cache_.count(job.key))bytes+=job.footprint.outputBytes;
+    return bytes;
+}
+size_t Engine::runningDecodeBytes() const {
+    size_t bytes=0;
+    for(const auto& [id,job]:running_)bytes+=job.footprint.workingBytes;
+    return bytes;
+}
+bool Engine::prefetchCacheFits(const Job& job,size_t outputBytes) const {
+    const size_t required=outputBytes+reservedOutputBytes();
+    if(required>budget_)return false;
+    size_t evictable=0;
+    for(const auto& [key,entry]:cache_)if(prefetchEvictable(entry,job))evictable+=entry.frame->bytes();
+    return bytes_-evictable<=budget_-required;
+}
+void Engine::reservePrefetchCache(const Job& job,size_t outputBytes){
+    const size_t required=outputBytes+reservedOutputBytes();
+    while(required<=budget_&&bytes_>budget_-required){
+        auto victim=cache_.end();
+        for(auto it=cache_.begin();it!=cache_.end();++it){
+            if(!prefetchEvictable(it->second,job))continue;
+            if(victim==cache_.end()||
+               (it->second.ctx!=activeCtx_&&victim->second.ctx==activeCtx_)||
+               (it->second.ctx==victim->second.ctx&&it->second.use<victim->second.use))victim=it;
+        }
+        if(victim==cache_.end())break;
+        bytes_-=victim->second.frame->bytes();cache_.erase(victim);++evicted_;++prefetchReclaims_;
+    }
+}
+void Engine::work(bool foregroundOnly,int workerId){
     Preview decoder;
     for(;;){
         Job job;
+        Json dispatch;
         {
             std::unique_lock lock(mutex_);
             const auto available=[&]{
-                return std::find_if(jobs_.begin(),jobs_.end(),[&](const auto& j){return j.foreground||running_.size()<size_t(backgroundLimit_);});
+                const auto background=foregroundWorkerEnabled_?runningBackground():running_.size();
+                return std::find_if(jobs_.begin(),jobs_.end(),[&](const auto& j){
+                    if(foregroundWorkerEnabled_&&j.foreground&&!currentTarget(j))return false;
+                    if(j.foreground)return true;
+                    if(foregroundOnly||background>=size_t(backgroundLimit_))return false;
+                    if(!guardPrefetch(j))return true;
+                    if(j.ctx==activeCtx_&&!footprints_.count(j.ctx)){prefetchWaitReason_="await-frame-cost";return false;}
+                    const auto footprint=footprintFor(j);
+                    if(!prefetchCacheFits(j,footprint.outputBytes)){prefetchWaitReason_="cache-protected";return false;}
+                    if(!prefetchBudget_.allows(footprint.workingBytes,runningDecodeBytes())){prefetchWaitReason_="system-headroom";return false;}
+                    prefetchWaitReason_.clear();return true;
+                });
             };
-            wake_.wait(lock,[&]{return stopping_||available()!=jobs_.end();});if(stopping_)return;
-            auto it=available();job=std::move(*it);jobs_.erase(it);running_.emplace(job.id,job);
+            auto it=jobs_.end();
+            // Keep the selected iterator: pixel allocations can change the
+            // memory forecast between two independent availability checks.
+            wake_.wait(lock,[&]{if(stopping_)return true;it=available();return it!=jobs_.end();});if(stopping_)return;
+            job=std::move(*it);jobs_.erase(it);job.foregroundWorker=foregroundOnly;
+            job.footprint=footprintFor(job);
+            if(guardPrefetch(job))reservePrefetchCache(job,job.footprint.outputBytes);
+            running_.emplace(job.id,job);
+            peakRunning_=std::max(peakRunning_,running_.size());
+            const auto background=runningBackground();size_t otherContext=0;
+            for(const auto& [id,running]:running_)if(id!=job.id&&(running.epoch!=job.epoch||running.ctx!=job.ctx))++otherContext;
+            dispatch={{"workerId",workerId},{"workerRole",foregroundOnly?"foreground":"general"},{"context",job.ctx},
+                {"foregroundWorkerEnabled",foregroundWorkerEnabled_},{"runningAtStart",running_.size()},
+                {"foregroundRunningAtStart",running_.size()-background},{"backgroundRunningAtStart",background},
+                {"otherContextRunningAtStart",otherContext},{"decodeEstimateBytes",job.footprint.workingBytes},
+                {"outputEstimateBytes",job.footprint.outputBytes},{"prefetchMemory",prefetchBudget_.statistics()}};
         }
         Completion value;value.epoch=job.epoch;value.key=job.key;value.opened=job.open;value.jobId=job.id;
+        value.dispatchSnapshot=std::move(dispatch);
         value.taskSnapshot=job.payload.value("taskSnapshot",Json::object());
         value.foreground=job.foreground;value.queueMs=elapsed(job.queued);value.started=Clock::now();
+        const auto current=[&]{std::lock_guard lock(mutex_);return job.epoch==epoch_&&(!foregroundWorkerEnabled_||!job.foreground||currentTarget(job));};
         try{
-            if(job.epoch==epoch_){
-                if(job.open){value.sequence=discover(job.payload.at("file"),[&]{return job.epoch==epoch_;});value.frame=decode(decoder,{{"file",value.sequence.files.at(value.sequence.index)}});}
+            if(current()){
+                if(job.open){
+                    value.sequence=discover(job.payload.at("file"),current);
+                    if(current())value.frame=decode(decoder,{{"file",value.sequence.files.at(value.sequence.index)}});
+                    else value.cancelledBeforeDecode=true;
+                }
                 else value.frame=decode(decoder,job.payload);
-            }
+            }else value.cancelledBeforeDecode=true;
         }catch(const std::exception& error){value.error=error.what();}
         value.finished=Clock::now();value.decodeMs=elapsed(value.started);
         {
@@ -256,10 +389,18 @@ void Engine::work(){
             auto it=pending_.find(std::to_string(job.epoch)+"|"+job.key);
             if(it!=pending_.end()&&it->second==job.id)pending_.erase(it);
             ++completed_;
+            if(value.cancelledBeforeDecode)++cancelledBeforeDecode_;
             if(job.epoch==epoch_){
                 if(value.frame&&!job.open){
                     const auto cost=value.frame->bytes();
-                    if(cost<=budget_&&(job.ctx==activeCtx_||bytes_+cost<=budget_)){
+                    auto [known,inserted]=footprints_.try_emplace(job.ctx,DecodeFootprint{cost,value.frame->decodeWorkingBytes});
+                    known->second.outputBytes=std::max(known->second.outputBytes,cost);
+                    known->second.workingBytes=std::max(known->second.workingBytes,value.frame->decodeWorkingBytes);
+                    const bool speculative=guardPrefetch(job)&&!currentTarget(job);
+                    const bool retain=!speculative||prefetchCacheFits(job,cost);
+                    if(speculative&&retain)reservePrefetchCache(job,cost);
+                    if(!retain)++prefetchDiscarded_;
+                    if(retain&&cost<=budget_&&(job.ctx==activeCtx_||bytes_+cost<=budget_)){
                         auto old=cache_.find(job.key);if(old!=cache_.end())bytes_-=old->second.frame->bytes();
                         bytes_+=cost;cache_[job.key]={value.frame,++use_,job.pos,job.ctx};trim();
                     }else if(job.ctx==activeCtx_&&job.pos==activeHead_){

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #pragma once
 #include "../cpp/preview.hpp"
+#include "prefetch_budget.hpp"
 #include <atomic>
 #include <array>
 #include <condition_variable>
@@ -27,6 +28,7 @@ struct Frame {
     std::array<int,4> mapping{0,1,2,3};
     int width=0,height=0,channels=0;
     bool half=false;
+    size_t decodeWorkingBytes=0;
     size_t bytes() const { return pixels?pixels->byteSize():0; }
     const void* data() const { return pixels?pixels->data():nullptr; }
     std::array<int,4> displayMap(const std::string& component,bool available) const {
@@ -48,6 +50,7 @@ std::shared_ptr<Frame> decode(Preview& decoder,const Json& request);
 Json colorRequest(const Json& request);
 struct Completion {
     Json taskSnapshot=Json::object();
+    Json dispatchSnapshot=Json::object();
     uint64_t epoch=0;
     std::string key,error;
     std::shared_ptr<Frame> frame;
@@ -55,6 +58,7 @@ struct Completion {
     bool opened=false;
     uint64_t jobId=0;
     bool foreground=false;
+    bool cancelledBeforeDecode=false;
     double queueMs=0,decodeMs=0;
     Clock::time_point started=Clock::now(),finished=Clock::now();
 };
@@ -70,6 +74,8 @@ public:
     void purge();
     void setPlayHead(const std::string& context,int head,int length,bool loop,int shown=-1,int protectAhead=12);
     void setBackgroundLimit(int limit);
+    void updatePrefetchBudget(size_t displayReserveBytes);
+    size_t prefetchCapacity(size_t frameBytes);
     void retainQueued(const std::unordered_set<std::string>& keys);
     bool pending(const std::string& key);
     size_t budget();
@@ -77,8 +83,10 @@ public:
     std::vector<Completion> take();
     void setBudget(size_t bytes);
     size_t cacheBytes();
+    bool foregroundWorkerEnabled() const { return foregroundWorkerEnabled_; }
+    int decodeLimit() const { return foregroundWorkerEnabled_?3:2; }
 private:
-    struct Job {std::string key;Json payload;uint64_t epoch;bool open=false;int pos=0;std::string ctx;Clock::time_point queued=Clock::now();uint64_t id=0;bool foreground=false;};
+    struct Job {std::string key;Json payload;uint64_t epoch;bool open=false;int pos=0;std::string ctx;Clock::time_point queued=Clock::now();uint64_t id=0;bool foreground=false;bool foregroundWorker=false;DecodeFootprint footprint;};
     struct Entry {std::shared_ptr<Frame> frame;uint64_t use;int pos=0;std::string ctx;};
     std::mutex mutex_;
     std::condition_variable wake_;
@@ -89,6 +97,22 @@ private:
     std::unordered_map<uint64_t,Job> running_;
     uint64_t nextJob_=0,cancelled_=0,deduplicated_=0,completed_=0,evicted_=0;
     int backgroundLimit_=2;
+    PrefetchBudget prefetchBudget_;
+    std::unordered_map<std::string,DecodeFootprint> footprints_;
+    std::string prefetchWaitReason_;
+    size_t prefetchCapacity_=1;
+    uint64_t prefetchReclaims_=0,prefetchDiscarded_=0;
+    DecodeFootprint footprintFor(const Job& job) const;
+    bool guardPrefetch(const Job& job) const;
+    bool prefetchEvictable(const Entry& entry,const Job& job) const;
+    size_t reservedOutputBytes() const;
+    size_t runningDecodeBytes() const;
+    bool prefetchCacheFits(const Job& job,size_t outputBytes) const;
+    void reservePrefetchCache(const Job& job,size_t outputBytes);
+    bool foregroundWorkerEnabled_=false;
+    std::string foregroundWorkerFallback_;
+    size_t peakRunning_=0;
+    uint64_t cancelledBeforeDecode_=0;
     std::shared_ptr<Frame> transient_;
     std::string transientKey_;
     void cancelQueued(std::deque<Job>::iterator job);
@@ -101,7 +125,9 @@ private:
     std::string activeCtx_;
     int activeHead_=0,activeShown_=-1,activeLength_=1,protectAhead_=12;
     bool activeLoop_=false;
-    void work();
+    bool currentTarget(const Job& job) const;
+    size_t runningBackground() const;
+    void work(bool foregroundOnly,int workerId);
     void trim();
 };
 }

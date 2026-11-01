@@ -1,0 +1,18 @@
+[
+  {
+    "archive": "6.11.3-0-202609240253qtbase-Windows-Windows_11_24H2-Clang-Windows-Windows_11_24H2-X86_64.7z",
+    "sha256": "a07592158a2af0eb89f88117955f507645331c7351fccc2889a6b335553c5c43"
+  },
+  {
+    "archive": "6.11.3-0-202609240253qtdeclarative-Windows-Windows_11_24H2-Clang-Windows-Windows_11_24H2-X86_64.7z",
+    "sha256": "439f50fe7bdf61c2a81134ec26ede24beb3641621496f0bc1dc4e3f395892cd1"
+  },
+  {
+    "archive": "6.11.3-0-202609240253qtshadertools-Windows-Windows_11_24H2-Clang-Windows-Windows_11_24H2-X86_64.7z",
+    "sha256": "d19f0e558c08a76ae952c1eccccec298c9c415afbdfdd656979cf1b9342dfc9f"
+  },
+  {
+    "archive": "6.11.3-0-202609240253qtsvg-Windows-Windows_11_24H2-Clang-Windows-Windows_11_24H2-X86_64.7z",
+    "sha256": "fe6a16e592d6459fd93e0b4168251d08965989a8de76683f6772187f0431c254"
+  }
+]

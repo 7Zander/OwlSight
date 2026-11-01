@@ -77,6 +77,8 @@ private:
     bool scheduleDirty_=true,handoff_=false;
     int shownIndex_=-1,shownLayer_=-1,continuousAhead_=0;
     size_t frameCost_=64*owl::MiB;
+    size_t renderWorkingBytes_=0;
+    size_t prefetchDisplayReserve() const;
     uint64_t noOpInputs_=0,coalescedInputs_=0,operationId_=0,operationSequence_=0;
     QString operationKind_;
     owl::Clock::time_point operationStarted_=owl::Clock::now();

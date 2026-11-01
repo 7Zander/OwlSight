@@ -292,10 +292,11 @@ void Viewer::startRecording(){
         error="无法开始记录日志："+log.errorString();return;
     }
     logging=true;nextLogFlush_=Clock::now();
-    event("session.start",{{"gpuEnabled",gpuEnabled_},{"gpuModes","0,2"},{"readyMeaning","CPU image ready or GPU commands recorded, not monitor presentation"},{"decodeLimit",2},{"gpuTextureBudgetMiB",1024},
+    event("session.start",{{"gpuEnabled",gpuEnabled_},{"gpuModes","0,2"},{"readyMeaning","CPU image ready or GPU commands recorded, not monitor presentation"},{"decodeLimit",engine.decodeLimit()},{"gpuTextureBudgetMiB",1024},
+        {"foregroundWorkerEnabled",engine.foregroundWorkerEnabled()},{"pipeline",jsonVariant(engine.statistics())},
         {"texturePoolEnabled",qEnvironmentVariableIntValue("OWLSIGHT_DISABLE_TEXTURE_POOL")==0},
         {"asyncUploadEnabled",qEnvironmentVariableIntValue("OWLSIGHT_DISABLE_UPLOAD_PREPARE")==0},
-        {"uploadTicketBudgetMiB",256},{"uploadTicketLimit",3},{"performanceStage","R1"},
+        {"uploadTicketBudgetMiB",256},{"uploadTicketLimit",3},{"performanceStage","R1+foreground-worker+prefetch-memory-candidate"},
         {"recordingTrigger","user-button"},{"timeOrigin","application start"},{"counterOrigin","application start; recording may start later"},
         {"targetIndex",index},{"targetLayer",selected},{"frameCount",int(sequence.files.size())},
         {"operationId",QVariant::fromValue(operationId_)},{"operationKind",operationKind_},
@@ -316,8 +317,8 @@ void Viewer::stopRecording(const QString& reason){
 Viewer::~Viewer(){timer.stop();finishOperation("cancelled");stopRecording("application-exit");}
 void Viewer::event(const QString& name,const QVariantMap& data){
     if(!logging||!log.isOpen())return;
-    auto item=data;item["event"]=name;item["backend"]="cpp-qtquick";item["schema"]=4;item["monotonicMs"]=elapsed(sessionStart_);
-    item["version"]="0.2.0";item["build"]=OWLSIGHT_BUILD_NUMBER;item["timeUnixMs"]=QDateTime::currentMSecsSinceEpoch();
+    auto item=data;item["event"]=name;item["backend"]="cpp-qtquick";item["schema"]=5;item["monotonicMs"]=elapsed(sessionStart_);
+    item["version"]=OWLSIGHT_VERSION;item["build"]=OWLSIGHT_BUILD_NUMBER;item["timeUnixMs"]=QDateTime::currentMSecsSinceEpoch();
     item["playing"]=playing;item["mode"]=mode;item["divisor"]=divisor;item["component"]=component;
     log.write(QJsonDocument::fromVariant(item).toJson(QJsonDocument::Compact)+"\n");
 }
@@ -359,11 +360,22 @@ void Viewer::accepted(const std::shared_ptr<const Frame>& pixels){
     if(handoff_||Clock::now()>nextFrame+interval)nextFrame=Clock::now()+interval;
     handoff_=false;finishOperation("submitted");nextSchedule_=Clock::now();
 }
+size_t Viewer::prefetchDisplayReserve() const {
+    const auto pixels=gpuFrame_&&gpuFrame_->pixels?gpuFrame_->pixels:visiblePixels_;
+    if(!pixels)return renderWorkingBytes_;
+    const size_t count=size_t(pixels->width)*pixels->height;
+    if(!gpuEligible())return std::max(renderWorkingBytes_,count*20); // float RGBA + QImage RGBA8
+    const size_t upload=count*4*(pixels->half?2:4);
+    // Up to three immutable tickets (256 MiB total), plus one accepted upload.
+    // QRhi/driver allocations remain estimates; this is not a GPU memory cap.
+    return renderWorkingBytes_+std::min(size_t(256*MiB),upload*3)+upload;
+}
 void Viewer::schedule(){
     const auto now=Clock::now();
     if(scheduleDirty_){engine.purge();scheduleDirty_=false;nextSchedule_=now;}
     if(now<nextSchedule_)return;
     nextSchedule_=now+std::chrono::milliseconds(25);
+    engine.updatePrefetchBudget(prefetchDisplayReserve());
     if(grid){
         engine.setBackgroundLimit(2);std::unordered_set<std::string> needed;
         for(int l=0;l<int(layers.size());++l)if(thumbs.value(l).isEmpty()){
@@ -378,7 +390,7 @@ void Viewer::schedule(){
     }
     const int count=int(sequence.files.size());
     const auto advance=[&](int start,int steps){int n=start+steps;return n<count?n:loop?n%count:-1;};
-    const int capacity=int(std::min<size_t>(count,std::max<size_t>(1,engine.budget()/std::max<size_t>(frameCost_,1))));
+    const int capacity=int(std::min<size_t>(count,std::max<size_t>(1,engine.prefetchCapacity(frameCost_))));
     const int runway=std::min(std::max(0,capacity-1),std::max(1,(fps+3)/4));
     int ahead=0;
     for(int d=1;d<capacity;++d){const int n=advance(index,d);if(n<0||!engine.has(key(n,selected)))break;++ahead;}
@@ -475,7 +487,7 @@ void Viewer::render(const std::shared_ptr<Frame>&frame,int layer,bool thumb,cons
         emit gpuFrameChanged();emit changed();return;
     }
     if(rendering)return;
-    rendering=true;auto l=layers[layer];auto componentCopy=component;int modeCopy=mode;float exposureCopy=float(exposure);auto colorCopy=color;auto gen=generation;
+    rendering=true;renderWorkingBytes_=size_t(frame->width)*frame->height*20;auto l=layers[layer];auto componentCopy=component;int modeCopy=mode;float exposureCopy=float(exposure);auto colorCopy=color;auto gen=generation;
     QString info=qs(l.label)+" · "+component+"   "+originalSize;
     if(sequence.files.size()>1)info+="   帧 "+QString::number(sequence.numbers[index]);
     renderFuture=std::async(std::launch::async,[=]{
@@ -496,8 +508,11 @@ void Viewer::tick(){
                 {"cacheBytes",QVariant::fromValue(qulonglong(engine.cacheBytes()))}};
             if(done.frame->metadata.contains("diagnostics"))timing["diagnostics"]=jsonVariant(done.frame->metadata["diagnostics"]);
             timing["taskSnapshot"]=jsonVariant(done.taskSnapshot);
+            timing["dispatch"]=jsonVariant(done.dispatchSnapshot);
             event("decode.ready",timing);
         }
+        if(done.cancelledBeforeDecode)event("decode.cancelled",{{"jobId",QVariant::fromValue(done.jobId)},{"key",qs(done.key)},
+            {"stage","before-decode"},{"dispatch",jsonVariant(done.dispatchSnapshot)},{"queueWaitMs",done.queueMs}});
         if(!done.error.empty()){
             failed.insert(done.key);if(done.opened){opening=false;error=qs(done.error);}else if(done.key==key(index,selected)){error=qs(done.error);playing=false;}
             if(done.opened||done.key==key(index,selected))finishOperation("failed");
@@ -531,7 +546,7 @@ void Viewer::tick(){
         });dirty=true;
     }
     if(rendering&&renderFuture.wait_for(std::chrono::seconds(0))==std::future_status::ready){
-        rendering=false;
+        rendering=false;renderWorkingBytes_=0;
         try{
             auto result=renderFuture.get();
             event("cpu.render",{{"renderMs",result.renderMs},{"thumbnail",result.thumb},{"accepted",result.generation==generation},{"key",result.key}});
